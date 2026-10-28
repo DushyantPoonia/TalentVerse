@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
-import { Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AnimatePresence, MotionConfig, motion, useReducedMotion } from 'framer-motion';
 import { ArrowDown, ArrowRight, ArrowUpRight, BarChart3, BookOpen, BriefcaseBusiness, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Compass, GraduationCap, Layers3, Lightbulb, LockKeyhole, Menu, Plus, Rocket, ShieldCheck, Sparkles, Target, TrendingUp, X } from 'lucide-react';
 import { assessmentApi, authApi, profileApi } from './api.js';
 import { getLatestAssessment, loadDashboardData } from './dashboardData.js';
+import { scrollToHash } from './navigation.js';
+import { getRoadmapCards, normalizeCompletedTasks, summarizeRoadmap } from './roadmap.js';
 
 const reveal = { hidden: { opacity: 0, y: 22 }, show: { opacity: 1, y: 0, transition: { duration: .55, ease: [.22, 1, .36, 1] } } };
 const pathways = ['Product Designer', 'Frontend Developer', 'Data Analyst', 'Product Manager', 'UX Researcher', 'Marketing Strategist'];
@@ -13,7 +15,15 @@ function Logo({ light = false }) {
   return <Link to="/" className={`brand ${light ? 'brand-light' : ''}`} aria-label="TalentVerse home"><span className="brand-mark"><span /><span /><span /></span><span>talent<span className="brand-bold">verse</span></span></Link>;
 }
 
-function Header({ onAuth, token }) {
+function HashScroller() {
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash) scrollToHash(hash, document);
+  }, [hash]);
+  return null;
+}
+
+function Header({ onAuth, onStartAssessment, token }) {
   const [menu, setMenu] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => { const onScroll = () => setScrolled(window.scrollY > 12); window.addEventListener('scroll', onScroll); return () => window.removeEventListener('scroll', onScroll); }, []);
@@ -21,10 +31,10 @@ function Header({ onAuth, token }) {
   return <header className={`site-header ${scrolled ? 'is-scrolled' : ''}`}>
     <div className="nav-wrap"><Logo />
       <nav className="desktop-nav" aria-label="Main navigation"><Link to="/#home">Home</Link>{links.map(([name, to]) => <Link to={to} key={name}>{name}</Link>)}</nav>
-      <div className="nav-actions">{token ? <Link className="text-button signin" to="/dashboard">My dashboard</Link> : <button className="text-button signin" onClick={() => onAuth('login')}>Sign in</button>}<button className="button button-small" onClick={() => onAuth(token ? 'dashboard' : 'register')}>{token ? 'Dashboard' : 'Get started'} <ArrowUpRight size={15} /></button></div>
+      <div className="nav-actions">{token ? <Link className="text-button signin" to="/dashboard">My dashboard</Link> : <button className="text-button signin" onClick={() => onAuth('login')}>Sign in</button>}<button className="button button-small" onClick={onStartAssessment}>{token ? 'New roadmap' : 'Get started'} <ArrowUpRight size={15} /></button></div>
       <button className="mobile-menu" aria-label={menu ? 'Close menu' : 'Open menu'} aria-expanded={menu} onClick={() => setMenu(!menu)}>{menu ? <X /> : <Menu />}</button>
     </div>
-    <AnimatePresence>{menu && <motion.nav className="mobile-nav" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} aria-label="Mobile navigation">{[['Home', '/#home'], ...links].map(([name, to]) => <Link to={to} onClick={() => setMenu(false)} key={name}>{name}</Link>)}<button onClick={() => { setMenu(false); onAuth('login'); }}>Sign in</button><button className="button" onClick={() => { setMenu(false); onAuth('register'); }}>Get started <ArrowUpRight size={16} /></button></motion.nav>}</AnimatePresence>
+    <AnimatePresence>{menu && <motion.nav className="mobile-nav" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} aria-label="Mobile navigation">{[['Home', '/#home'], ...links].map(([name, to]) => <Link to={to} onClick={() => setMenu(false)} key={name}>{name}</Link>)}{token ? <Link to="/dashboard" onClick={() => setMenu(false)}>My dashboard</Link> : <button onClick={() => { setMenu(false); onAuth('login'); }}>Sign in</button>}<button className="button" onClick={() => { setMenu(false); onStartAssessment(); }}>{token ? 'New roadmap' : 'Get started'} <ArrowUpRight size={16} /></button></motion.nav>}</AnimatePresence>
   </header>;
 }
 
@@ -74,10 +84,10 @@ function JourneySection() {
   </div></section>;
 }
 
-function ProductPreview() {
+function ProductPreview({ onStartAssessment }) {
   const [done, setDone] = useState([true, false, false]);
   return <section className="section preview-section"><div className="container preview-layout">
-    <motion.div className="preview-copy" variants={reveal} initial="hidden" whileInView="show" viewport={{ once: true }}><span className="eyebrow">A roadmap that feels like yours</span><h2>Small steps.<br /><span>Real momentum.</span></h2><p>Skip the vague advice. Get a clear view of your current strengths, what to build next, and a plan that respects the time you actually have.</p><ul className="check-list"><li><Check size={16} /> Priorities grounded in your target role</li><li><Check size={16} /> Projects that turn skills into proof</li><li><Check size={16} /> A flexible plan you can make your own</li></ul><Link to="/assessment" className="inline-link">Build your roadmap <ArrowRight size={16} /></Link></motion.div>
+    <motion.div className="preview-copy" variants={reveal} initial="hidden" whileInView="show" viewport={{ once: true }}><span className="eyebrow">A roadmap that feels like yours</span><h2>Small steps.<br /><span>Real momentum.</span></h2><p>Skip the vague advice. Get a clear view of your current strengths, what to build next, and a plan that respects the time you actually have.</p><ul className="check-list"><li><Check size={16} /> Priorities grounded in your target role</li><li><Check size={16} /> Projects that turn skills into proof</li><li><Check size={16} /> A flexible plan you can make your own</li></ul><Link to="/assessment" onClick={(event) => { event.preventDefault(); onStartAssessment(); }} className="inline-link">Build your roadmap <ArrowRight size={16} /></Link></motion.div>
     <motion.div className="dashboard-mock" variants={reveal} initial="hidden" whileInView="show" viewport={{ once: true }}>
       <div className="mock-header"><div className="mock-brand"><span className="brand-mark tiny"><span /><span /><span /></span> Your growth space <span className="demo-badge">DEMO</span></div><div className="mock-user">A</div></div>
       <div className="mock-greeting"><div><span className="eyebrow">AN EXAMPLE LEARNING PLAN</span><h3>Your next chapter, Alex.</h3></div><span className="mock-streak"><Sparkles size={13} /> Week 2</span></div>
@@ -118,13 +128,13 @@ function FaqSection() {
   return <section className="section faq-section" id="faq"><div className="container faq-layout"><div><span className="eyebrow">GOOD QUESTIONS</span><h2>A little more<br /><span>clarity.</span></h2><p>Something else on your mind? We’re happy to help.</p><a className="inline-link" href={`mailto:${import.meta.env.VITE_CONTACT_EMAIL || 'hello@talentverse.example'}`}>Get in touch <ArrowRight size={16} /></a></div><div className="faq-list">{faqs.map(([question, answer], i) => <div className={`faq-item ${open === i ? 'faq-open' : ''}`} key={question}><button onClick={() => setOpen(open === i ? -1 : i)} aria-expanded={open === i}><span>{question}</span><ChevronDown size={18} /></button><AnimatePresence initial={false}>{open === i && <motion.div className="faq-answer" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}><p>{answer}</p></motion.div>}</AnimatePresence></div>)}</div></div></section>;
 }
 
-function Footer() {
-  return <footer className="site-footer"><div className="container"><div className="footer-cta"><div><span className="eyebrow">YOUR NEXT STEP STARTS HERE</span><h2>Make room for what’s next.</h2><p>One thoughtful assessment can make the path ahead feel a little clearer.</p></div><Link className="button button-lime" to="/assessment">Build my roadmap <ArrowUpRight size={17} /></Link></div><div className="footer-bottom"><Logo light /><span>© {new Date().getFullYear()} TalentVerse. Made for your next chapter.</span><div><Link to="/#features">Features</Link><Link to="/#how-it-works">How it works</Link><Link to="/#faq">FAQ</Link><Link to="/privacy">Privacy</Link><a href={`mailto:${import.meta.env.VITE_CONTACT_EMAIL || 'hello@talentverse.example'}`}>Contact</a></div></div></div></footer>;
+function Footer({ onStartAssessment }) {
+  return <footer className="site-footer"><div className="container"><div className="footer-cta"><div><span className="eyebrow">YOUR NEXT STEP STARTS HERE</span><h2>Make room for what’s next.</h2><p>One thoughtful assessment can make the path ahead feel a little clearer.</p></div><button className="button button-lime" onClick={onStartAssessment}>Build my roadmap <ArrowUpRight size={17} /></button></div><div className="footer-bottom"><Logo light /><span>© {new Date().getFullYear()} TalentVerse. Made for your next chapter.</span><div><Link to="/#features">Features</Link><Link to="/#how-it-works">How it works</Link><Link to="/#faq">FAQ</Link><Link to="/privacy">Privacy</Link><a href={`mailto:${import.meta.env.VITE_CONTACT_EMAIL || 'hello@talentverse.example'}`}>Contact</a></div></div></div></footer>;
 }
 
-function Landing({ onAuth, token, onSessionExpired }) {
-  return <><Header onAuth={onAuth} token={token} /><main><section className="hero" id="home"><div className="hero-grid-pattern" /><div className="container hero-layout"><motion.div className="hero-copy" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: .12 } } }}><motion.div variants={reveal} className="hero-kicker"><span className="kicker-spark">✳</span> YOUR CAREER, WITH A LITTLE MORE CLARITY</motion.div><motion.h1 variants={reveal}>Turn your skills into your <span>next career move.</span></motion.h1><motion.p variants={reveal}>TalentVerse helps you spot your skill gaps and build a personalized roadmap—so you can move forward with a plan that feels like yours.</motion.p><motion.div variants={reveal} className="hero-buttons"><Link className="button" to="/assessment">Build my career roadmap <ArrowRight size={17} /></Link><a className="button button-outline" href="#how-it-works"><span className="play-icon">▶</span> See how it works</a></motion.div><motion.div variants={reveal} className="hero-footnote"><span><Check size={14} /> Made for students & early-career talent</span><i /> No guesswork. Just a next step.</motion.div></motion.div><ReadinessCard /></div><a href="#problems" className="scroll-cue" aria-label="Scroll to learn more"><ArrowDown size={16} /></a></section>
-    <div id="problems"><ProblemSection /></div><JourneySection /><ProductPreview /><FeaturesSection /><StorySection /><AssessmentSection onAuth={(mode) => onAuth(mode, '/#assessment')} onSessionExpired={onSessionExpired} token={token} /><FaqSection /></main><Footer /></>;
+function Landing({ onAuth, onStartAssessment, onSessionExpired, token }) {
+  return <><Header onAuth={onAuth} onStartAssessment={onStartAssessment} token={token} /><main><section className="hero" id="home"><div className="hero-grid-pattern" /><div className="container hero-layout"><motion.div className="hero-copy" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: .12 } } }}><motion.div variants={reveal} className="hero-kicker"><span className="kicker-spark">✳</span> YOUR CAREER, WITH A LITTLE MORE CLARITY</motion.div><motion.h1 variants={reveal}>Turn your skills into your <span>next career move.</span></motion.h1><motion.p variants={reveal}>TalentVerse helps you spot your skill gaps and build a personalized roadmap—so you can move forward with a plan that feels like yours.</motion.p><motion.div variants={reveal} className="hero-buttons"><button className="button" onClick={onStartAssessment}>Build my career roadmap <ArrowRight size={17} /></button><a className="button button-outline" href="#how-it-works"><span className="play-icon">▶</span> See how it works</a></motion.div><motion.div variants={reveal} className="hero-footnote"><span><Check size={14} /> Made for students & early-career talent</span><i /> No guesswork. Just a next step.</motion.div></motion.div><ReadinessCard /></div><a href="#problems" className="scroll-cue" aria-label="Scroll to learn more"><ArrowDown size={16} /></a></section>
+    <div id="problems"><ProblemSection /></div><JourneySection /><ProductPreview onStartAssessment={onStartAssessment} /><FeaturesSection /><StorySection /><AssessmentSection onAuth={(mode) => onAuth(mode, '/assessment')} onSessionExpired={onSessionExpired} onStartAssessment={onStartAssessment} token={token} /><FaqSection /></main><Footer onStartAssessment={onStartAssessment} /></>;
 }
 
 const assessmentSteps = [
@@ -135,7 +145,7 @@ const assessmentSteps = [
 ];
 const initialAssessment = { targetCareer: '', experience: '', skills: [], goal: '', education: '', targetRegion: '', weeklyHours: 5, projects: '' };
 
-function AssessmentSection({ onAuth, onSessionExpired, token }) {
+function AssessmentSection({ onAuth, onSessionExpired, onStartAssessment, token }) {
   const [step, setStep] = useState(0);
   const [data, setData] = useState(initialAssessment);
   const [busy, setBusy] = useState(false);
@@ -151,6 +161,7 @@ function AssessmentSection({ onAuth, onSessionExpired, token }) {
     try {
       const response = await assessmentApi.create(token, data);
       if (!response?.analysis || typeof response.analysis !== 'object') throw new Error('The API returned an incomplete roadmap. Please try again.');
+      if (typeof response.analysis._id === 'string') sessionStorage.setItem('tv_selected_roadmap', response.analysis._id);
       setResult(response.analysis);
     } catch (e) {
       if (e.status === 401) {
@@ -163,7 +174,7 @@ function AssessmentSection({ onAuth, onSessionExpired, token }) {
   const toggleSkill = (skill) => update('skills', data.skills.includes(skill) ? data.skills.filter((s) => s !== skill) : [...data.skills, skill]);
   return <section className="section assessment-section" id="assessment"><div className="container"><SectionTitle kicker="Your next move starts here" title={<>Let’s find your <span>starting point.</span></>} text="A few thoughtful questions. A plan you can actually use." centered />
     <div className="assessment-shell">
-      {result ? <div className="result-view"><div className="result-success"><span><Check size={22} /></span><div><span className="eyebrow">YOUR ROADMAP IS READY</span><h3>{result.suggestedPaths?.[0]?.title || data.targetCareer}</h3><p>{result.suggestedPaths?.[0]?.explanation}</p></div></div><div className="result-readiness"><strong>{result.readiness?.score ?? '—'}<small>%</small></strong><span>readiness estimate</span><p>{result.readiness?.explanation}</p></div>{result.suggestedPaths?.length > 1 && <div className="result-paths"><h4>Other paths worth exploring</h4>{result.suggestedPaths.slice(1).map((path) => <div key={path.title}><b>{path.title}</b><p>{path.explanation}</p></div>)}</div>}<div className="result-grid"><div><h4>Build on these strengths</h4>{result.currentSkills?.map((s) => <span className="result-tag" key={s}>{s}</span>)}</div><div><h4>Skills to explore</h4>{result.skillGaps?.map((s) => <span className="result-tag gap" title={s.reason} key={s.skill}>{s.skill}</span>)}</div></div><h4>Your first next steps</h4><ol className="result-list">{result.nextSteps?.map((s, i) => <li key={s}><b>0{i + 1}</b>{s}</li>)}</ol><section className="result-section"><h4>Projects to make your skills visible</h4>{result.projects?.map((project) => <article className="result-project" key={project.title}><b>{project.title}</b><p>{project.description}</p><small>{project.skills.join(' · ')}</small></article>)}</section><section className="result-section"><h4>Your week-by-week roadmap</h4>{result.roadmap?.map((week) => <article className="result-week" key={week.week}><span>WEEK {week.week}</span><div><b>{week.theme}</b><p>{week.tasks.join(' · ')}</p><small>{week.estimatedHours} hours</small></div></article>)}</section><button className="button" onClick={() => { setResult(null); setStep(0); setData(initialAssessment); }}>Start another assessment <ArrowRight size={16} /></button></div> : <div className="assessment-content">
+      {!token ? <div className="assessment-auth-prompt"><span className="aside-icon"><LockKeyhole size={21} /></span><h3>Sign in to build your roadmap</h3><p>Sign in or create an account to build and save your personalized career roadmap.</p><div><button className="button button-outline" onClick={() => onAuth('login')}>Sign in</button><button className="button" onClick={onStartAssessment}>Create account <ArrowRight size={16} /></button></div></div> : result ? <div className="result-view"><div className="result-success"><span><Check size={22} /></span><div><span className="eyebrow">YOUR ROADMAP IS READY</span><h3>{result.suggestedPaths?.[0]?.title || data.targetCareer}</h3><p>{result.suggestedPaths?.[0]?.explanation}</p></div></div><div className="result-readiness"><strong>{result.readiness?.score ?? '—'}<small>%</small></strong><span>readiness estimate</span><p>{result.readiness?.explanation}</p></div>{result.suggestedPaths?.length > 1 && <div className="result-paths"><h4>Other paths worth exploring</h4>{result.suggestedPaths.slice(1).map((path) => <div key={path.title}><b>{path.title}</b><p>{path.explanation}</p></div>)}</div>}<div className="result-grid"><div><h4>Build on these strengths</h4>{result.currentSkills?.map((s) => <span className="result-tag" key={s}>{s}</span>)}</div><div><h4>Skills to explore</h4>{result.skillGaps?.map((s) => <span className="result-tag gap" title={s.reason} key={s.skill}>{s.skill}</span>)}</div></div><h4>Your first next steps</h4><ol className="result-list">{result.nextSteps?.map((s, i) => <li key={s}><b>0{i + 1}</b>{s}</li>)}</ol><section className="result-section"><h4>Projects to make your skills visible</h4>{result.projects?.map((project) => <article className="result-project" key={project.title}><b>{project.title}</b><p>{project.description}</p><small>{project.skills.join(' · ')}</small></article>)}</section><section className="result-section"><h4>Your week-by-week roadmap</h4>{result.roadmap?.map((week) => <article className="result-week" key={week.week}><span>WEEK {week.week}</span><div><b>{week.theme}</b><p>{week.tasks.join(' · ')}</p><small>{week.estimatedHours} hours</small></div></article>)}</section><button className="button" onClick={() => { setResult(null); setStep(0); setData(initialAssessment); }}>Start another assessment <ArrowRight size={16} /></button><Link className="inline-link" to="/dashboard">Open saved roadmap <ArrowRight size={15} /></Link></div> : <div className="assessment-content">
         <aside className="assessment-aside"><div className="aside-icon"><Sparkles size={21} /></div><span className="eyebrow">YOUR ROADMAP BUILDER</span><h3>Good things start with a little curiosity.</h3><p>This is about finding your next step—not having all the answers today.</p><div className="aside-bottom"><div className="aside-progress"><i style={{ width: `${(step + 1) / assessmentSteps.length * 100}%` }} /></div><span>About 3 minutes</span><LockKeyhole size={15} /></div></aside>
         <div className="assessment-form"><div className="form-top"><span>STEP {step + 1} <i /> {assessmentSteps.length}</span><div className="step-dots">{assessmentSteps.map((_, i) => <i key={i} className={i <= step ? 'active' : ''} />)}</div></div>
           <AnimatePresence mode="wait"><motion.div key={step} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: .2 }}>
@@ -174,13 +185,12 @@ function AssessmentSection({ onAuth, onSessionExpired, token }) {
             {active.type === 'goal' && <div className="form-fields"><label className="input-label">What would you love to achieve?<select value={data.goal} onChange={(e) => update('goal', e.target.value)}><option value="">Choose a goal</option><option>Land my first role</option><option>Find an internship</option><option>Build a portfolio</option><option>Explore a career change</option><option>Grow in my current role</option></select></label><div className="two-fields"><label className="input-label">Target region<input placeholder="e.g. Remote, India" value={data.targetRegion} onChange={(e) => update('targetRegion', e.target.value)} /></label><label className="input-label">Hours per week<input type="number" min="1" max="40" value={data.weeklyHours} onChange={(e) => update('weeklyHours', Number(e.target.value))} /></label></div><label className="input-label">Projects or proof of work (optional)<textarea rows="2" placeholder="Anything you’ve made, contributed to, or are proud of…" value={data.projects} onChange={(e) => update('projects', e.target.value)} /></label></div>}
           </motion.div></AnimatePresence>
           {error && <div className="error-message" role="alert">{error}</div>}<div className="assessment-controls">{step > 0 && <button className="back-button" onClick={() => { setError(''); setStep(step - 1); }}><ChevronLeft size={17} /> Back</button>}{step < assessmentSteps.length - 1 ? <button className="button" disabled={!valid} onClick={() => { setError(''); setStep(step + 1); }}>Continue <ChevronRight size={17} /></button> : <button className="button" disabled={!valid || busy} onClick={submitAssessment}>{busy ? 'Building your roadmap…' : 'Create my roadmap'} <ArrowRight size={17} /></button>}</div>
-          {!token && <p className="assessment-signin">Already have an account? <button onClick={() => onAuth('login')}>Sign in</button> after finishing to save your assessment.</p>}
         </div></div>}
     </div>
   </div></section>;
 }
 
-function AuthModal({ mode, onClose, onMode, onAuthenticated }) {
+function AuthModal({ mode, onClose, onMode, onAuthenticated, roadmapIntent }) {
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -190,12 +200,12 @@ function AuthModal({ mode, onClose, onMode, onAuthenticated }) {
     try { const { token } = await authApi[mode]({ ...form, name: form.name }); localStorage.setItem('tv_token', token); onAuthenticated(token); onClose(); }
     catch (e2) { setError(e2.message); } finally { setBusy(false); }
   };
-  return <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}><motion.div role="dialog" aria-modal="true" aria-labelledby="auth-title" className="auth-modal" initial={{ opacity: 0, y: 12, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8 }}><button className="modal-close" onClick={onClose} aria-label="Close"><X size={20} /></button><Logo /><span className="eyebrow">{mode === 'register' ? 'A GOOD PLACE TO BEGIN' : 'WELCOME BACK'}</span><h2 id="auth-title">{mode === 'register' ? 'Make your next move.' : 'Pick up where you left off.'}</h2><p>{mode === 'register' ? 'Create your free account to save your roadmap.' : 'Sign in to revisit your roadmap.'}</p><form onSubmit={submit}>{mode === 'register' && <label className="input-label">Your name<input required minLength="2" autoComplete="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>}<label className="input-label">Email address<input required type="email" autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label><label className="input-label">Password<input required type="password" minLength="8" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>{error && <div className="error-message" role="alert">{error}</div>}<button className="button auth-submit" disabled={busy}>{busy ? 'One moment…' : mode === 'register' ? 'Create account' : 'Sign in'} <ArrowRight size={17} /></button></form><div className="auth-toggle">{mode === 'register' ? 'Already have an account?' : 'New to TalentVerse?'} <button onClick={() => { setError(''); onMode(mode === 'register' ? 'login' : 'register'); }}>{mode === 'register' ? 'Sign in' : 'Create an account'}</button></div><small className="auth-privacy"><LockKeyhole size={12} /> Your career journey stays yours.</small></motion.div></motion.div>;
+  return <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}><motion.div role="dialog" aria-modal="true" aria-labelledby="auth-title" className="auth-modal" initial={{ opacity: 0, y: 12, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8 }}><button className="modal-close" onClick={onClose} aria-label="Close"><X size={20} /></button><Logo /><span className="eyebrow">{mode === 'register' ? 'A GOOD PLACE TO BEGIN' : 'WELCOME BACK'}</span><h2 id="auth-title">{mode === 'register' ? 'Make your next move.' : 'Pick up where you left off.'}</h2><p>{roadmapIntent ? 'Sign in or create an account to build and save your personalized career roadmap.' : mode === 'register' ? 'Create your free account to save your roadmap.' : 'Sign in to revisit your roadmap.'}</p><form onSubmit={submit}>{mode === 'register' && <label className="input-label">Your name<input required minLength="2" autoComplete="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>}<label className="input-label">Email address<input required type="email" autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label><label className="input-label">Password<input required type="password" minLength="8" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>{error && <div className="error-message" role="alert">{error}</div>}<button className="button auth-submit" disabled={busy}>{busy ? 'One moment…' : mode === 'register' ? 'Create account' : 'Sign in'} <ArrowRight size={17} /></button></form><div className="auth-toggle">{mode === 'register' ? 'Already have an account?' : 'New to TalentVerse?'} <button onClick={() => { setError(''); onMode(mode === 'register' ? 'login' : 'register'); }}>{mode === 'register' ? 'Sign in' : 'Create an account'}</button></div><small className="auth-privacy"><LockKeyhole size={12} /> Your career journey stays yours.</small></motion.div></motion.div>;
 }
 
-function AssessmentPage({ onAuth, onSessionExpired, token }) {
+function AssessmentPage({ onAuth, onStartAssessment, onSessionExpired, token }) {
   const assessmentAuth = (mode) => onAuth(mode, '/assessment');
-  return <><Header onAuth={assessmentAuth} token={token} /><main><AssessmentSection onAuth={assessmentAuth} onSessionExpired={onSessionExpired} token={token} /></main><Footer /></>;
+  return <><Header onAuth={assessmentAuth} onStartAssessment={onStartAssessment} token={token} /><main><AssessmentSection onAuth={assessmentAuth} onSessionExpired={onSessionExpired} onStartAssessment={onStartAssessment} token={token} /></main><Footer onStartAssessment={onStartAssessment} /></>;
 }
 
 function NotFoundPage() {
@@ -207,8 +217,39 @@ function PrivacyPage() {
   return <main className="privacy-page"><header className="privacy-header"><Logo /><Link className="inline-link" to="/">Back to TalentVerse <ArrowRight size={15} /></Link></header><article className="privacy-content"><span className="eyebrow">YOUR DATA, YOUR JOURNEY</span><h1>Privacy at TalentVerse</h1><p className="privacy-lead">TalentVerse uses the information you provide to create and save career learning recommendations. This page describes the data handling built into this application.</p><h2>Information we store</h2><p>When you register, the service stores your name, email address, and a securely hashed password. If you complete an assessment, your career goal, experience, education, skills, target region, learning time, project notes, generated analysis, and roadmap progress are stored with your account in MongoDB.</p><h2>AI recommendations</h2><p>To create an analysis, the API sends assessment details and the selected career's skill requirements to the configured external language-model provider. The provider API key is held by the server and is not sent to your browser. Review your provider's privacy and data-retention terms before configuring it.</p><h2>How to manage your information</h2><p>Your information is used to provide your profile, assessment history, and roadmap. For access, correction, or deletion requests, contact the operator of the TalentVerse deployment at <a href={`mailto:${contact}`}>{contact}</a>. The deployment operator is responsible for configuring the database, provider, retention, and contact address.</p><h2>Security and deployment</h2><p>Passwords are hashed before storage and private records are scoped to the signed-in account. Authentication tokens are stored in your browser's local storage. This application does not promise a particular retention period; that depends on the operator's deployment and database practices.</p><p className="privacy-updated">Last updated: October 28, 2026</p><Link className="button" to="/">Return to TalentVerse <ArrowRight size={16} /></Link></article><footer className="privacy-footer"><Logo /><span>Make room for what’s next.</span></footer></main>;
 }
 
-function Dashboard({ token, onLogout }) {
+function RoadmapLibrary({ history, selectedId, nextOffset, loadingMore, retryDelay, pageError, onLoadMore, onStartAssessment, returnTo }) {
+  const cards = getRoadmapCards(history);
+  return <section className="dash-card roadmap-library">
+    <div className="roadmap-library-heading">
+      <div><span className="eyebrow">YOUR CAREER JOURNEYS</span><h2>All roadmaps</h2><p>{cards.length} saved roadmap{cards.length === 1 ? '' : 's'} loaded</p></div>
+      <Link className="button button-outline" to={returnTo}>Back to dashboard</Link>
+    </div>
+    {cards.length ? <div className="roadmap-library-grid">{cards.map((card) =>
+      <Link className={`roadmap-library-card ${selectedId === card.id ? 'is-selected' : ''}`} key={card.id} to={card.route} aria-current={selectedId === card.id ? 'page' : undefined} onClick={() => sessionStorage.setItem('tv_selected_roadmap', card.id)}>
+        <span className="eyebrow">{card.createdAt}</span><h3>{card.title}</h3>
+        <p>{card.skillGapCount} skill gaps · {card.projectCount} project ideas · ID {card.id.slice(-6)}</p>
+        <span className="roadmap-library-footer"><span>{card.readiness ?? '—'}% readiness</span><span>Open roadmap <ArrowRight size={15} /></span></span>
+      </Link>
+    )}</div> : <div className="empty-dashboard"><div><Sparkles size={24} /></div><h2>No saved roadmaps yet</h2><p>Complete an assessment to create your first personalized roadmap.</p><button className="button" onClick={onStartAssessment}>Start an assessment <ArrowRight size={16} /></button></div>}
+    {pageError && <p className="dashboard-error" role="alert">Could not load older roadmaps: {pageError}<button onClick={() => onLoadMore(true)}>Retry</button></p>}
+    {nextOffset !== null && <button className="history-more button button-outline" onClick={() => onLoadMore(false)} disabled={loadingMore || retryDelay > 0}>{loadingMore ? 'Loading…' : retryDelay > 0 ? 'Wait before retrying' : 'Load older roadmaps'}</button>}
+  </section>;
+}
+
+function Dashboard({ token, onLogout, onStartAssessment }) {
+  const { assessmentId } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const showingAllRoadmaps = location.pathname === '/dashboard/roadmaps';
+  const historyRequestVersion = useRef(0);
   const [history, setHistory] = useState([]);
+  const storedSelection = sessionStorage.getItem('tv_selected_roadmap');
+  const selectedRoadmapId = assessmentId || storedSelection || history[0]?._id;
+  const [historyNextOffset, setHistoryNextOffset] = useState(null);
+  const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
+  const [historyPageError, setHistoryPageError] = useState('');
+  const [historyRetrying, setHistoryRetrying] = useState(false);
+  const [historyRetryDelay, setHistoryRetryDelay] = useState(0);
   const [historyError, setHistoryError] = useState('');
   const [error, setError] = useState('');
   const [profileError, setProfileError] = useState('');
@@ -219,8 +260,19 @@ function Dashboard({ token, onLogout }) {
   const [profileBusy, setProfileBusy] = useState(false);
   const [profileMessage, setProfileMessage] = useState('');
   const [completedTasks, setCompletedTasks] = useState([]);
+  const [progressLoading, setProgressLoading] = useState(false);
   const [progressBusy, setProgressBusy] = useState(false);
+  const [selectedDetail, setSelectedDetail] = useState(null);
+  const [selectedLoading, setSelectedLoading] = useState(false);
+  const [selectedError, setSelectedError] = useState('');
+  const [taskFilter, setTaskFilter] = useState('all');
   const [refreshKey, setRefreshKey] = useState(0);
+  useEffect(() => {
+    historyRequestVersion.current += 1;
+    setHistoryLoadingMore(false);
+    setHistoryRetrying(false);
+    return () => { historyRequestVersion.current += 1; };
+  }, [location.pathname, token]);
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -230,32 +282,77 @@ function Dashboard({ token, onLogout }) {
     loadDashboardData({
       getUser: () => authApi.me(token),
       getHistory: () => assessmentApi.history(token),
-      getProfile: () => profileApi.get(token)
-    }).then(({ user: account, history: savedAssessments, profile: savedProfile, errors }) => {
+      getProfile: () => profileApi.get(token),
+      initialHistory: history
+    }).then(({ user: account, history: savedAssessments, historyNextOffset: nextOffset, profile: savedProfile, errors }) => {
       if (!active) return;
       setUser(account);
-      setHistory(savedAssessments);
+      if (!errors.history) {
+        setHistory(savedAssessments);
+        setHistoryNextOffset(nextOffset);
+        setHistoryPageError('');
+      }
       setProfile(savedProfile || { education: '', experience: '', targetRegion: '', skills: [], goal: '', weeklyHours: 5, projects: '' });
       setError(errors.user?.message || '');
       setHistoryError(errors.history?.message || '');
+      if (errors.history?.retryAfterMs > 0) setHistoryRetryDelay(errors.history.retryAfterMs);
+      else if (!errors.history) setHistoryRetryDelay(0);
       setProfileError(errors.profile?.message || '');
-      if (errors.user?.status === 401) onLogout();
+      if ([errors.user, errors.history, errors.profile].some((requestError) => requestError?.status === 401)) onLogout();
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [token, refreshKey]);
-  const latest = getLatestAssessment(history);
   useEffect(() => {
-    const id = history[0]?._id;
-    if (!id) {
+    if (selectedRoadmapId) sessionStorage.setItem('tv_selected_roadmap', selectedRoadmapId);
+  }, [selectedRoadmapId]);
+  const detailId = assessmentId || (!showingAllRoadmaps && !loading && storedSelection && !history.some((item) => item._id === storedSelection)
+    ? storedSelection
+    : null);
+  useEffect(() => {
+    if (!detailId) {
+      setSelectedDetail(null);
+      setSelectedError('');
+      setSelectedLoading(false);
+      return undefined;
+    }
+    let active = true;
+    setSelectedDetail(null);
+    setSelectedError('');
+    setSelectedLoading(true);
+    assessmentApi.get(token, detailId).then(({ analysis, assessment }) => {
+      if (!analysis || typeof analysis !== 'object') throw new Error('The saved roadmap response was incomplete.');
+      if (active) setSelectedDetail({ ...analysis, assessment: assessment || analysis.assessment });
+    }).catch((e) => {
+      if (active) setSelectedError(e.message);
+    }).finally(() => {
+      if (active) setSelectedLoading(false);
+    });
+    return () => { active = false; };
+  }, [detailId, token, refreshKey]);
+  const activeRecord = detailId
+    ? selectedDetail?._id === detailId ? selectedDetail : null
+    : history.find((item) => item._id === selectedRoadmapId) || history[0] || null;
+  const activeAnalysis = activeRecord ? getLatestAssessment([activeRecord]) : null;
+  const activeId = detailId || activeRecord?._id;
+  useEffect(() => {
+    if (showingAllRoadmaps || !activeId || !activeRecord) {
       setCompletedTasks([]);
+      setProgressLoading(false);
       return;
     }
     let active = true;
-    assessmentApi.progress(token, id).then(({ progress }) => {
-      if (active) setCompletedTasks(progress?.completedTasks || []);
-    }).catch((e) => { if (active) setProfileMessage(`Could not load roadmap progress: ${e.message}`); });
+    setCompletedTasks([]);
+    setProgressLoading(true);
+    assessmentApi.progress(token, activeId).then(({ progress }) => {
+      if (active) setCompletedTasks(normalizeCompletedTasks(activeRecord.roadmap, progress?.completedTasks));
+    }).catch((e) => {
+      if (active) setProfileMessage(`Could not load roadmap progress: ${e.message}`);
+    }).finally(() => {
+      if (active) setProgressLoading(false);
+    });
     return () => { active = false; };
-  }, [history, token]);
+  }, [activeId, activeRecord, showingAllRoadmaps, token]);
+  const progressSummary = summarizeRoadmap(activeAnalysis?.roadmap, completedTasks);
   const saveProfile = async (e) => {
     e.preventDefault();
     if (profileBusy) return;
@@ -268,27 +365,97 @@ function Dashboard({ token, onLogout }) {
     catch (e2) { setProfileMessage(e2.message); }
     finally { setProfileBusy(false); }
   };
+  const loadMoreHistory = async () => {
+    if (historyLoadingMore || historyRetryDelay > 0 || historyNextOffset === null) return;
+    const requestVersion = historyRequestVersion.current;
+    setHistoryLoadingMore(true);
+    setHistoryPageError('');
+    try {
+      const response = await assessmentApi.history(token, historyNextOffset, { refresh: true });
+      if (requestVersion !== historyRequestVersion.current) return;
+      if (!Array.isArray(response?.assessments)) throw new Error('The API returned invalid assessment history.');
+      const { assessments, nextOffset = null } = response;
+      setHistory((current) => {
+        const existingIds = new Set(current.map((item) => item._id).filter(Boolean));
+        const merged = [...current];
+        assessments.forEach((item) => {
+          if (!item._id || !existingIds.has(item._id)) {
+            merged.push(item);
+            if (item._id) existingIds.add(item._id);
+          }
+        });
+        return merged;
+      });
+      setHistoryNextOffset(Number.isSafeInteger(nextOffset) ? nextOffset : null);
+      setHistoryRetryDelay(0);
+    } catch (e) {
+      if (requestVersion !== historyRequestVersion.current) return;
+      setHistoryPageError(e.message);
+      if (e.retryAfterMs > 0) setHistoryRetryDelay(e.retryAfterMs);
+      if (e.status === 401) onLogout();
+    } finally {
+      if (requestVersion === historyRequestVersion.current) setHistoryLoadingMore(false);
+    }
+  };
+  const retryHistory = async () => {
+    if (historyRetrying || historyRetryDelay > 0) return;
+    const requestVersion = historyRequestVersion.current;
+    setHistoryRetrying(true);
+    try {
+      const response = await assessmentApi.history(token, 0, { refresh: true });
+      if (requestVersion !== historyRequestVersion.current) return;
+      if (!Array.isArray(response?.assessments)) throw new Error('The API returned invalid assessment history.');
+      setHistory(response.assessments);
+      setHistoryNextOffset(Number.isSafeInteger(response.nextOffset) ? response.nextOffset : null);
+      setHistoryPageError('');
+      setHistoryRetryDelay(0);
+      setHistoryError('');
+    } catch (e) {
+      if (requestVersion !== historyRequestVersion.current) return;
+      setHistoryError(e.message);
+      if (e.retryAfterMs > 0) setHistoryRetryDelay(e.retryAfterMs);
+      if (e.status === 401) onLogout();
+    } finally {
+      if (requestVersion === historyRequestVersion.current) setHistoryRetrying(false);
+    }
+  };
+  useEffect(() => {
+    if (historyRetryDelay <= 0) return undefined;
+    const timer = window.setTimeout(() => setHistoryRetryDelay(0), historyRetryDelay);
+    return () => window.clearTimeout(timer);
+  }, [historyRetryDelay]);
   const toggleTask = async (key) => {
-    if (progressBusy || !history[0]) return;
+    if (progressBusy || !activeId) return;
     const next = completedTasks.includes(key) ? completedTasks.filter((item) => item !== key) : [...completedTasks, key];
     setCompletedTasks(next); setProgressBusy(true); setProfileMessage('');
-    try { await assessmentApi.updateProgress(token, history[0]._id, next); }
+    try { await assessmentApi.updateProgress(token, activeId, next); }
     catch (e) { setCompletedTasks(completedTasks); setProfileMessage(`Could not save your progress: ${e.message}`); }
     finally { setProgressBusy(false); }
   };
+  const selectedTitle = activeRecord?.assessment?.targetCareer || activeAnalysis?.suggestedPaths?.[0]?.title || 'Career roadmap';
+  const defaultReturnTo = selectedRoadmapId ? `/dashboard/assessments/${selectedRoadmapId}` : '/dashboard';
+  const returnToDashboard = defaultReturnTo;
+  const filteredTasks = new Set(progressSummary.tasks
+    .filter(({ key }) => taskFilter === 'all' || (taskFilter === 'completed') === completedTasks.includes(key))
+    .map(({ key }) => key));
   return <div className="dashboard-page"><header className="dashboard-nav"><Logo /><div><span>{user?.name ? `Hi, ${user.name}` : 'Your growth space'}</span><button className="text-button" onClick={onLogout}>Sign out</button></div></header><main className="dashboard-main">
-    <div className="dashboard-welcome"><div><span className="eyebrow">YOUR TALENTVERSE</span><h1>Your next chapter, at your pace.</h1><p>A little progress is still progress. Here’s where you’re headed.</p></div><div className="dashboard-actions"><button className="button button-outline" onClick={() => setEditProfile(!editProfile)}>Edit profile</button><Link to="/assessment" className="button">New assessment <Plus size={17} /></Link></div></div>
+    <div className="dashboard-welcome"><div><span className="eyebrow">YOUR TALENTVERSE</span><h1>Your next chapter, at your pace.</h1><p>A little progress is still progress. Here’s where you’re headed.</p></div><div className="dashboard-actions"><button className="button button-outline" onClick={() => setEditProfile(!editProfile)}>Edit profile</button><button className="button" onClick={onStartAssessment}>New assessment <Plus size={17} /></button></div></div>
     {profileMessage && <p className="profile-message" role="status">{profileMessage}</p>}
     {error && <div className="dashboard-error" role="alert">{error}<button onClick={() => setRefreshKey((current) => current + 1)}>Retry</button><button onClick={onLogout}>Sign out</button></div>}
-    {historyError && <div className="dashboard-error" role="alert">Could not load assessment history: {historyError}<button onClick={() => setRefreshKey((current) => current + 1)}>Retry</button></div>}
+    {historyError && <div className="dashboard-error" role="alert" aria-busy={historyRetrying}>Could not load assessment history: {historyRetrying ? 'Retrying…' : historyError}<button onClick={retryHistory} disabled={historyRetrying || historyRetryDelay > 0}>{historyRetrying ? 'Retrying…' : historyRetryDelay > 0 ? 'Wait before retrying' : 'Retry'}</button></div>}
     {profileError && <div className="profile-message" role="alert">Could not load your profile: {profileError}<button onClick={() => setRefreshKey((current) => current + 1)}>Retry</button></div>}
     {editProfile && <form className="dash-card profile-form" onSubmit={saveProfile}><div className="panel-title">Your profile <button className="back-button" type="button" onClick={() => setEditProfile(false)}>Cancel</button></div><div className="profile-fields"><label className="input-label">Education<input value={profile.education || ''} onChange={(e) => setProfile({ ...profile, education: e.target.value })} /></label><label className="input-label">Experience<input value={profile.experience || ''} onChange={(e) => setProfile({ ...profile, experience: e.target.value })} /></label><label className="input-label">Target region<input value={profile.targetRegion || ''} onChange={(e) => setProfile({ ...profile, targetRegion: e.target.value })} /></label><label className="input-label">Weekly learning hours<input type="number" min="1" max="40" required value={profile.weeklyHours || 5} onChange={(e) => setProfile({ ...profile, weeklyHours: Number(e.target.value) })} /></label><label className="input-label profile-wide">Career goal<input value={profile.goal || ''} onChange={(e) => setProfile({ ...profile, goal: e.target.value })} /></label><label className="input-label profile-wide">Projects and proof of work<textarea rows="2" value={profile.projects || ''} onChange={(e) => setProfile({ ...profile, projects: e.target.value })} /></label><button className="button profile-wide" disabled={profileBusy}>{profileBusy ? 'Saving…' : 'Save profile'} <Check size={16} /></button></div></form>}
-    {loading ? <div className="empty-dashboard" role="status"><div><Sparkles size={24} /></div><h2>Loading your growth space…</h2><p>Gathering your profile and saved roadmap.</p></div> : historyError ? null : history.length ? <>
-      <div className="dashboard-overview"><div className="dash-card readiness-dash"><span className="eyebrow">LATEST READINESS ESTIMATE</span><div className="dash-score">{latest?.readiness?.score ?? '—'}<small>%</small></div><p>{latest?.readiness?.explanation}</p><span className="career-badge"><BriefcaseBusiness size={15} /> {latest?.assessment?.targetCareer}</span></div><div className="dash-card skills-dash"><span className="eyebrow">YOUR SKILLS TO EXPLORE</span><h3>Build your next layer</h3>{latest?.skillGaps.slice(0, 4).map((g, index) => <div className="gap-row" key={g.skill || index}><span>{g.skill}</span><span className={`priority priority-${g.priority}`}>{g.priority}</span></div>)}</div></div>
-      <div className="dash-card dash-roadmap"><div className="panel-title">Your next steps <span>{latest?.roadmap.length || 0} weeks</span></div>{latest?.roadmap.map((week, index) => <article className="week-card" key={week.week ?? index}><span className="week-number">WEEK {week.week}</span><div><h4>{week.theme}</h4><div className="week-tasks">{week.tasks.map((task, taskIndex) => { const taskKey = `week-${week.week ?? index}:${task}`; const checked = completedTasks.includes(taskKey); return <button key={`${taskKey}-${taskIndex}`} className={`roadmap-task ${checked ? 'is-complete' : ''}`} onClick={() => toggleTask(taskKey)} aria-pressed={checked}><span className="task-check">{checked && <Check size={12} />}</span>{task}</button>; })}</div><small><Clock3 size={13} /> {week.estimatedHours} hours</small></div></article>)}</div>
-      {latest?.projects.length > 0 && <div className="dash-card dashboard-projects"><div className="panel-title">Projects to make your skills visible <span>{latest.projects.length} ideas</span></div><div className="dashboard-project-grid">{latest.projects.map((project, index) => <article className="dashboard-project" key={project.title || index}><span className="feature-icon"><Rocket size={17} /></span><h3>{project.title}</h3><p>{project.description}</p><small>{project.skills.join(' · ')}</small></article>)}</div></div>}
-      <div className="dash-card assessment-history"><div className="panel-title">Assessment history <span>{history.length} saved</span></div>{history.map((item, index) => <div className="history-row" key={item._id || index}><span className="history-icon"><Target size={17} /></span><div><b>{item.assessment?.targetCareer || 'Career assessment'}</b><small>{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Date unavailable'}</small></div><span className="history-score">{item.readiness?.score ?? '—'}%</span></div>)}</div>
-    </> : <div className="empty-dashboard"><div><Sparkles size={24} /></div><h2>Your roadmap is waiting.</h2><p>Start with a short assessment and get a thoughtful plan shaped around your goals.</p><Link to="/assessment" className="button">Build my first roadmap <ArrowRight size={17} /></Link></div>}
+    {loading ? <div className="empty-dashboard" role="status"><div><Sparkles size={24} /></div><h2>Loading your growth space…</h2><p>Gathering your profile and saved roadmap.</p></div> : historyError && !history.length && !detailId ? null : showingAllRoadmaps ? <RoadmapLibrary history={history} selectedId={selectedRoadmapId} nextOffset={historyNextOffset} loadingMore={historyLoadingMore} retryDelay={historyRetryDelay} pageError={historyPageError} onLoadMore={loadMoreHistory} onStartAssessment={onStartAssessment} returnTo={returnToDashboard} /> : history.length || detailId ? <>
+      {detailId && selectedLoading ? <div className="empty-dashboard" role="status"><div><Sparkles size={24} /></div><h2>Opening your saved roadmap…</h2><p>Loading this assessment’s saved results and progress.</p></div> : detailId && selectedError ? <div className="dashboard-error" role="alert">Could not open this roadmap: {selectedError}<button onClick={() => setRefreshKey((current) => current + 1)}>Retry</button><Link to="/dashboard">Back to dashboard</Link></div> : activeRecord && <>
+        <section className="dash-card active-roadmap"><div className="active-roadmap-heading"><div><span className="eyebrow">{detailId ? 'SELECTED ROADMAP' : 'ACTIVE ROADMAP'}</span><h2>{selectedTitle}</h2><p>{activeRecord.assessment?.goal || activeRecord.assessment?.experience || 'Your saved career assessment and learning plan.'}</p></div><div className="active-roadmap-actions"><Link className="button button-outline" to="/dashboard/roadmaps">All roadmaps</Link>{!detailId && activeId && <Link className="button button-outline" to={`/dashboard/assessments/${activeId}`}>Continue roadmap <ArrowRight size={16} /></Link>}</div></div><div className="roadmap-metrics"><div><strong>{progressSummary.completedCount}<small>/{progressSummary.totalCount}</small></strong><span>Tasks completed</span></div><div><strong>{progressSummary.remainingCount}</strong><span>Tasks remaining</span></div><div><strong>{progressSummary.percentage}<small>%</small></strong><span>Roadmap progress</span></div></div><div className="roadmap-progress-track" role="progressbar" aria-label="Roadmap completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow={progressSummary.percentage}><span style={{ width: `${progressSummary.percentage}%` }} /></div></section>
+        {activeAnalysis ? <>
+          <div className="dashboard-overview"><div className="dash-card readiness-dash"><span className="eyebrow">CAREER READINESS ESTIMATE</span><div className="dash-score">{activeAnalysis.readiness?.score ?? '—'}<small>%</small></div><p>{activeAnalysis.readiness?.explanation || 'No saved readiness explanation is available for this assessment.'}</p><span className="career-badge"><BriefcaseBusiness size={15} /> {selectedTitle}</span></div><div className="dash-card skills-dash"><span className="eyebrow">SKILLS TO EXPLORE</span><h3>Build your next layer</h3>{activeAnalysis.skillGaps.length ? activeAnalysis.skillGaps.slice(0, 4).map((gap, index) => <div className="gap-row" key={gap.skill || index}><span>{gap.skill}</span><span className={`priority priority-${gap.priority}`}>{gap.priority}</span></div>) : <p>No saved skill gaps for this roadmap.</p>}</div></div>
+          <section className="dash-card dash-roadmap"><div className="panel-title">Weekly roadmap <span>{activeAnalysis.roadmap.length} weeks</span></div><div className="task-manager-toolbar"><div><strong>{progressSummary.remainingCount ? 'Keep your momentum' : 'Roadmap complete'}</strong><small>{progressLoading ? 'Loading saved progress…' : `${progressSummary.completedCount} of ${progressSummary.totalCount} tasks complete`}</small></div><div className="task-filters" aria-label="Filter roadmap tasks">{[['all', 'All'], ['pending', 'Pending'], ['completed', 'Completed']].map(([value, label]) => <button key={value} type="button" className={taskFilter === value ? 'is-active' : ''} aria-pressed={taskFilter === value} onClick={() => setTaskFilter(value)}>{label}</button>)}</div></div>{activeAnalysis.roadmap.length ? activeAnalysis.roadmap.map((week, weekIndex) => { const weekTasks = progressSummary.tasks.filter((task) => task.weekIndex === weekIndex); const visibleTasks = weekTasks.filter((task) => filteredTasks.has(task.key)); const weekComplete = weekTasks.filter((task) => completedTasks.includes(task.key)).length; return <details className="week-card" key={`${week.week ?? weekIndex}-${weekIndex}`} open><summary><span className="week-number">WEEK {week.week ?? weekIndex + 1}</span><span className="week-summary"><strong>{week.theme || 'Learning milestone'}</strong><small>{weekComplete}/{weekTasks.length} complete{Number.isFinite(week.estimatedHours) ? ` · ${week.estimatedHours} hours` : ''}</small></span><ChevronDown size={16} /></summary><div className="week-tasks">{visibleTasks.map((task) => { const checked = completedTasks.includes(task.key); return <label key={task.key} className={`roadmap-task ${checked ? 'is-complete' : ''}`}><input type="checkbox" checked={checked} disabled={progressBusy || progressLoading} onChange={() => toggleTask(task.key)} /><span><b>{task.title}</b>{task.description && <small>{task.description}</small>}</span></label>; })}{!visibleTasks.length && <p className="task-filter-empty">{weekTasks.length ? 'No tasks match this filter.' : 'No tasks were saved for this week.'}</p>}</div></details>; }) : <p className="task-filter-empty">This assessment has no saved weekly tasks.</p>}</section>
+          {activeAnalysis.projects.length > 0 && <div className="dash-card dashboard-projects"><div className="panel-title">Projects to make your skills visible <span>{activeAnalysis.projects.length} ideas</span></div><div className="dashboard-project-grid">{activeAnalysis.projects.map((project, index) => <article className="dashboard-project" key={project.title || index}><span className="feature-icon"><Rocket size={17} /></span><h3>{project.title || 'Suggested project'}</h3><p>{project.description || ''}</p><small>{project.skills.join(' · ')}</small></article>)}</div></div>}
+        </> : <div className="dash-card"><h2>This assessment has no saved analysis</h2><p>The saved assessment is available, but its roadmap details are missing.</p></div>}
+      </>}
+      <div className="dash-card assessment-history"><div className="panel-title">Assessment history <span>{history.length} loaded</span><Link className="history-open" to="/dashboard/roadmaps">All roadmaps</Link></div>{history.map((item, index) => { const itemId = item._id; const title = item.assessment?.targetCareer || item.suggestedPaths?.[0]?.title || 'Career assessment'; const isSelected = selectedRoadmapId === itemId; const summary = `${item.skillGaps?.length || 0} skill gaps · ${item.projects?.length || 0} project ideas`; return <article className={`history-row ${isSelected ? 'is-selected' : ''}`} key={itemId || index}><span className="history-icon"><Target size={17} /></span><div className="history-copy"><b>{title}</b><small>{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Date unavailable'} · {summary}</small></div><span className="history-score">{item.readiness?.score ?? '—'}%</span>{itemId ? <Link className="history-open" to={`/dashboard/assessments/${itemId}`} aria-current={selectedRoadmapId === itemId ? 'page' : undefined}>View roadmap</Link> : <span className="history-open-disabled">Unavailable</span>}</article>; })}{historyPageError && <p className="dashboard-error" role="alert">Could not load older assessments: {historyPageError}<button onClick={() => loadMoreHistory(true)} disabled={historyRetryDelay > 0}>Retry</button></p>}{historyNextOffset !== null && <button className="history-more button button-outline" onClick={() => loadMoreHistory(false)} disabled={historyLoadingMore || historyRetryDelay > 0}>{historyLoadingMore ? 'Loading…' : historyRetryDelay > 0 ? 'Wait before retrying' : 'Load older assessments'}</button>}</div>
+    </> : <div className="empty-dashboard"><div><Sparkles size={24} /></div><h2>Your roadmap is waiting.</h2><p>Start with a short assessment and get a thoughtful plan shaped around your goals.</p><button className="button" onClick={onStartAssessment}>Build my first roadmap <ArrowRight size={17} /></button></div>}
   </main><footer className="dashboard-footer"><Logo /><span>Make room for what’s next.</span></footer></div>;
 }
 
@@ -297,13 +464,29 @@ export default function App() {
   const [authReturnTo, setAuthReturnTo] = useState('/dashboard');
   const [token, setToken] = useState(() => localStorage.getItem('tv_token'));
   const navigate = useNavigate();
+  const location = useLocation();
+  useEffect(() => {
+    if (!location.state?.authRequired) return;
+    setAuthReturnTo(location.state.returnTo || '/dashboard');
+    setAuthMode(location.state.authMode || 'register');
+    navigate(`${location.pathname}${location.search}${location.hash}`, { replace: true, state: null });
+  }, [location.hash, location.pathname, location.search, location.state, navigate]);
   const onAuth = (mode, returnTo = '/dashboard') => {
     if (mode === 'close') setAuthMode(null);
-    else if (mode === 'dashboard') navigate('/dashboard');
-    else { setAuthReturnTo(returnTo); setAuthMode(mode); }
+    else if (mode === 'dashboard' && token) navigate('/dashboard');
+    else { setAuthReturnTo(returnTo); setAuthMode(mode === 'dashboard' ? 'login' : mode); }
   };
-  const logout = () => { localStorage.removeItem('tv_token'); setToken(null); navigate('/'); };
-  const handleSessionExpired = () => { localStorage.removeItem('tv_token'); setToken(null); };
+  const startAssessment = () => {
+    if (token) navigate('/assessment');
+    else {
+      setAuthReturnTo('/assessment');
+      setAuthMode('register');
+    }
+  };
+  const logout = () => { assessmentApi.clearHistory(token); sessionStorage.removeItem('tv_selected_roadmap'); localStorage.removeItem('tv_token'); setToken(null); navigate('/'); };
+  const handleSessionExpired = () => { assessmentApi.clearHistory(token); sessionStorage.removeItem('tv_selected_roadmap'); localStorage.removeItem('tv_token'); setToken(null); };
   const handleAuthenticated = (value) => { setToken(value); navigate(authReturnTo); };
-  return <MotionConfig reducedMotion="user"><><Routes><Route path="/" element={<Landing onAuth={onAuth} onSessionExpired={handleSessionExpired} token={token} />} /><Route path="/assessment" element={<AssessmentPage onAuth={onAuth} onSessionExpired={handleSessionExpired} token={token} />} /><Route path="/dashboard" element={token ? <Dashboard token={token} onLogout={logout} /> : <Navigate to="/" replace />} /><Route path="/privacy" element={<PrivacyPage />} /><Route path="*" element={<NotFoundPage />} /></Routes><AnimatePresence>{authMode && <AuthModal mode={authMode} onClose={() => setAuthMode(null)} onMode={setAuthMode} onAuthenticated={handleAuthenticated} />}</AnimatePresence></></MotionConfig>;
+  const authRedirect = <Navigate to="/" replace state={{ authRequired: true, returnTo: `${location.pathname}${location.search}${location.hash}` }} />;
+  const roadmapIntent = authReturnTo === '/assessment' || authReturnTo.startsWith('/assessment?');
+  return <MotionConfig reducedMotion="user"><><HashScroller /><Routes><Route path="/" element={<Landing onAuth={onAuth} onStartAssessment={startAssessment} onSessionExpired={handleSessionExpired} token={token} />} /><Route path="/assessment" element={token ? <AssessmentPage onAuth={onAuth} onStartAssessment={startAssessment} onSessionExpired={handleSessionExpired} token={token} /> : authRedirect} /><Route path="/dashboard" element={token ? <Dashboard token={token} onLogout={logout} onStartAssessment={startAssessment} /> : authRedirect} /><Route path="/dashboard/roadmaps" element={token ? <Dashboard token={token} onLogout={logout} onStartAssessment={startAssessment} /> : authRedirect} /><Route path="/dashboard/assessments/:assessmentId" element={token ? <Dashboard token={token} onLogout={logout} onStartAssessment={startAssessment} /> : authRedirect} /><Route path="/privacy" element={<PrivacyPage />} /><Route path="*" element={<NotFoundPage />} /></Routes><AnimatePresence>{authMode && <AuthModal mode={authMode} onClose={() => setAuthMode(null)} onMode={setAuthMode} onAuthenticated={handleAuthenticated} roadmapIntent={roadmapIntent} />}</AnimatePresence></></MotionConfig>;
 }
