@@ -6,6 +6,7 @@ import { getCareerRequirements } from '../config/careerSkills.js';
 import { assessmentSchema, progressSchema } from '../validators/schemas.js';
 import { calculateReadiness, generateCareerAnalysis } from '../services/aiAnalysis.js';
 import { serializeAssessmentHistory } from '../utils/assessmentHistory.js';
+import { normalizeCompletedTasks } from '../utils/roadmapProgress.js';
 
 async function persistAssessment(input, generated, readinessScore, userId, requirements) {
   const assessment = await Assessment.create({ ...input, user: userId });
@@ -40,28 +41,76 @@ export function createAssessmentHandler({
 
 export const createAssessment = createAssessmentHandler();
 
-export async function listAssessments(req, res) {
-  const assessments = await CareerAnalysis.find({ user: req.user._id }).sort({ createdAt: -1 }).limit(50).populate('assessment').lean();
-  res.json({ assessments: serializeAssessmentHistory(assessments) });
+export function createListAssessmentsHandler({
+  findAssessments = (userId, offset, limit) => CareerAnalysis.find({ user: userId })
+    .sort({ createdAt: -1, _id: -1 })
+    .skip(offset)
+    .limit(limit)
+    .populate('assessment')
+    .lean()
+} = {}) {
+  return async function listAssessments(req, res) {
+    const offset = req.query.offset === undefined ? 0 : Number(req.query.offset);
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > 100000) {
+      return res.status(400).json({ message: 'Assessment history offset is invalid.' });
+    }
+    const pageSize = 50;
+    const results = await findAssessments(req.user._id, offset, pageSize + 1);
+    const hasMore = results.length > pageSize;
+    const assessments = results.slice(0, pageSize);
+    res.json({
+      assessments: serializeAssessmentHistory(assessments),
+      nextOffset: hasMore ? offset + pageSize : null
+    });
+  };
 }
 
-export async function getAssessment(req, res) {
-  const analysis = await CareerAnalysis.findOne({ _id: req.params.id, user: req.user._id }).populate('assessment').lean();
-  if (!analysis) return res.status(404).json({ message: 'Assessment was not found.' });
-  res.json({ assessment: analysis.assessment, analysis });
+export const listAssessments = createListAssessmentsHandler();
+
+const validAnalysisId = (id) => /^[a-f\d]{24}$/i.test(id || '');
+
+export function createRoadmapHandlers({
+  findAssessment = (id, userId) => CareerAnalysis.findOne({ _id: id, user: userId }).populate('assessment').lean(),
+  findRoadmap = (id, userId) => CareerAnalysis.findOne({ _id: id, user: userId }).select('_id roadmap').lean(),
+  findProgress = (analysisId, userId) => RoadmapProgress.findOne({ analysis: analysisId, user: userId }).lean(),
+  saveProgress = (analysisId, userId, completedTasks) => RoadmapProgress.findOneAndUpdate(
+    { analysis: analysisId, user: userId },
+    { $set: { completedTasks } },
+    { upsert: true, new: true, runValidators: true }
+  ).lean()
+} = {}) {
+  async function getAssessment(req, res) {
+    if (!validAnalysisId(req.params.id)) return res.status(400).json({ message: 'Assessment ID is invalid.' });
+    const analysis = await findAssessment(req.params.id, req.user._id);
+    if (!analysis) return res.status(404).json({ message: 'Assessment was not found.' });
+    res.json({ assessment: analysis.assessment, analysis });
+  }
+
+  async function getProgress(req, res) {
+    if (!validAnalysisId(req.params.id)) return res.status(400).json({ message: 'Roadmap ID is invalid.' });
+    const analysis = await findRoadmap(req.params.id, req.user._id);
+    if (!analysis) return res.status(404).json({ message: 'Roadmap was not found.' });
+    const progress = await findProgress(analysis._id, req.user._id);
+    if (!progress) return res.json({ progress: null });
+    const completedTasks = normalizeCompletedTasks(analysis.roadmap, progress.completedTasks) || [];
+    res.json({ progress: { ...progress, completedTasks } });
+  }
+
+  async function updateProgress(req, res) {
+    const { completedTasks } = progressSchema.parse(req.body);
+    if (!validAnalysisId(req.params.id)) return res.status(400).json({ message: 'Roadmap ID is invalid.' });
+    const analysis = await findRoadmap(req.params.id, req.user._id);
+    if (!analysis) return res.status(404).json({ message: 'Roadmap was not found.' });
+    const normalized = normalizeCompletedTasks(analysis.roadmap, completedTasks);
+    if (!normalized) return res.status(400).json({ message: 'Completed tasks must belong to this roadmap.' });
+    const progress = await saveProgress(analysis._id, req.user._id, normalized);
+    res.json({ progress });
+  }
+
+  return { getAssessment, getProgress, updateProgress };
 }
 
-export async function getProgress(req, res) {
-  const analysis = await CareerAnalysis.findOne({ _id: req.params.id, user: req.user._id }).select('_id');
-  if (!analysis) return res.status(404).json({ message: 'Roadmap was not found.' });
-  const progress = await RoadmapProgress.findOne({ analysis: analysis._id, user: req.user._id }).lean();
-  res.json({ progress });
-}
-
-export async function updateProgress(req, res) {
-  const { completedTasks } = progressSchema.parse(req.body);
-  const analysis = await CareerAnalysis.findOne({ _id: req.params.id, user: req.user._id }).select('_id');
-  if (!analysis) return res.status(404).json({ message: 'Roadmap was not found.' });
-  const progress = await RoadmapProgress.findOneAndUpdate({ analysis: analysis._id, user: req.user._id }, { $set: { completedTasks } }, { upsert: true, new: true, runValidators: true }).lean();
-  res.json({ progress });
-}
+const roadmapHandlers = createRoadmapHandlers();
+export const getAssessment = roadmapHandlers.getAssessment;
+export const getProgress = roadmapHandlers.getProgress;
+export const updateProgress = roadmapHandlers.updateProgress;

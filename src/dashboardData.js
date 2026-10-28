@@ -2,7 +2,7 @@ function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-export async function loadDashboardData({ getUser, getHistory, getProfile }) {
+export async function loadDashboardData({ getUser, getHistory, getProfile, initialHistory = [] }) {
   const [userResult, historyResult, profileResult] = await Promise.allSettled([
     Promise.resolve().then(getUser),
     Promise.resolve().then(getHistory),
@@ -18,7 +18,10 @@ export async function loadDashboardData({ getUser, getHistory, getProfile }) {
     user: userResult.status === 'fulfilled' ? userResult.value?.user || null : null,
     history: historyResult.status === 'fulfilled' && Array.isArray(historyResult.value?.assessments)
       ? historyResult.value.assessments
-      : [],
+      : initialHistory,
+    historyNextOffset: historyResult.status === 'fulfilled' && Number.isSafeInteger(historyResult.value?.nextOffset)
+      ? historyResult.value.nextOffset
+      : null,
     profile: profileResult.status === 'fulfilled' ? profileResult.value?.profile || null : null,
     errors
   };

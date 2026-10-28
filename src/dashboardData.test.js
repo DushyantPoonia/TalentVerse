@@ -16,6 +16,35 @@ test('dashboard data keeps successful sections available when another request fa
   assert.equal(data.errors.user, null);
 });
 
+test('dashboard refresh preserves previously loaded history when the refresh fails', async () => {
+  const previousHistory = [{ _id: 'saved-roadmap' }];
+  const rateLimitError = new Error('Too many requests. Please wait a moment before trying again.');
+  rateLimitError.status = 429;
+  rateLimitError.retryAfterMs = 1500;
+  const data = await loadDashboardData({
+    getUser: async () => ({ user: { name: 'Taylor' } }),
+    getHistory: async () => { throw rateLimitError; },
+    getProfile: async () => ({ profile: {} }),
+    initialHistory: previousHistory
+  });
+
+  assert.equal(data.history, previousHistory);
+  assert.equal(data.errors.history.status, 429);
+  assert.equal(data.errors.history.retryAfterMs, 1500);
+  assert.match(data.errors.history.message, /Too many requests/);
+});
+
+test('dashboard data preserves the next assessment history offset', async () => {
+  const data = await loadDashboardData({
+    getUser: async () => ({ user: { name: 'Taylor' } }),
+    getHistory: async () => ({ assessments: [{ _id: 'history-1' }], nextOffset: 50 }),
+    getProfile: async () => ({ profile: {} })
+  });
+
+  assert.equal(data.history.length, 1);
+  assert.equal(data.historyNextOffset, 50);
+});
+
 test('dashboard reads the latest flat history record and its roadmap data', () => {
   const latest = getLatestAssessment([{
     readiness: { score: 60, explanation: 'Self-reported skill match.' },
