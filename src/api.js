@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/+$/, '');
 
 export async function request(path, { token, ...options } = {}) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -15,7 +15,11 @@ export async function request(path, { token, ...options } = {}) {
     if (response.ok) throw new Error('The API returned an invalid response.');
     payload = {};
   }
-  if (!response.ok) throw new Error(payload.message || `Request failed (${response.status})`);
+  if (!response.ok) {
+    const error = new Error(payload?.message || `Request failed (${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
   return payload;
 }
 

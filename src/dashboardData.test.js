@@ -1,6 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getLatestAssessment } from './dashboardData.js';
+import { getLatestAssessment, loadDashboardData } from './dashboardData.js';
+
+test('dashboard data keeps successful sections available when another request fails', async () => {
+  const data = await loadDashboardData({
+    getUser: async () => ({ user: { name: 'Taylor' } }),
+    getHistory: async () => { throw new Error('History unavailable'); },
+    getProfile: async () => ({ profile: { goal: 'Build a portfolio' } })
+  });
+
+  assert.equal(data.user.name, 'Taylor');
+  assert.deepEqual(data.history, []);
+  assert.deepEqual(data.profile, { goal: 'Build a portfolio' });
+  assert.equal(data.errors.history.message, 'History unavailable');
+  assert.equal(data.errors.user, null);
+});
 
 test('dashboard reads the latest flat history record and its roadmap data', () => {
   const latest = getLatestAssessment([{

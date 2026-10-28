@@ -6,16 +6,16 @@ TalentVerse is a career-intelligence application for students and early-career p
 
 - Node.js 20+
 - MongoDB Atlas database (or a local MongoDB instance)
-- An OpenAI-compatible chat-completions API key for generating assessments
+- A Gemini API key for generating career analyses
 
 ## Local development
 
 1. Install frontend dependencies with `npm install`.
 2. Install API dependencies with `npm --prefix server install`.
-3. Configure the root `.env` and `server/.env` files as shown in [Environment](#environment). Vite reads the root file; the API loads `server/.env` through `dotenv`.
+3. Copy `.env.example` to `.env` and `server/.env.example` to `server/.env`, then replace placeholders with local configuration. Vite reads the root file; the API loads `server/.env` through `dotenv`.
 4. In one terminal, start the API with `npm run server`. In another terminal, start the frontend with `npm run dev`, then open the URL Vite prints (normally `http://localhost:5173`).
 
-The assessment form can be completed without an account, but analysis requires sign-in so the validated result can be saved to the user's account. If the AI provider is not configured or fails, the API reports an error and does not create a fake analysis.
+The assessment form can be completed without an account, but analysis requires sign-in so the validated result can be saved to the user's account. If Gemini is not configured or fails, the API reports an error and does not create a fake analysis.
 
 For an explicitly enabled development-only account seed, set `SEED_DEV_DATA=true`, `SEED_USER_EMAIL`, and `SEED_USER_PASSWORD` in `server/.env`, then run `npm --prefix server run seed`. The script refuses to run in production.
 
@@ -39,12 +39,12 @@ MONGODB_URI=<your MongoDB connection string>
 JWT_SECRET=<a long random secret>
 JWT_EXPIRES_IN=7d
 CLIENT_ORIGIN=http://localhost:5173
-LLM_API_KEY=<your provider API key>
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_MODEL=<your chat-completions model>
+LLM_API_KEY=<your Gemini API key>
+LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+LLM_MODEL=gemini-3.8-flash
 ```
 
-`MONGODB_URI` and `JWT_SECRET` are needed for the API to connect to MongoDB and issue tokens. `LLM_API_KEY` is needed for AI-generated analyses. `PORT`, `NODE_ENV`, `JWT_EXPIRES_IN`, `CLIENT_ORIGIN`, `LLM_BASE_URL`, and `LLM_MODEL` have defaults or can be adjusted as needed. The displayed values are examples or placeholders only; do not put real secrets in documentation.
+Create a Gemini API key in [Google AI Studio](https://aistudio.google.com/apikey) and put it only in `server/.env` as `LLM_API_KEY`. `MONGODB_URI` and `JWT_SECRET` are needed for the API to connect to MongoDB and issue tokens. `LLM_API_KEY` is needed for AI-generated analyses. `PORT`, `NODE_ENV`, `JWT_EXPIRES_IN`, `CLIENT_ORIGIN`, `LLM_BASE_URL`, and `LLM_MODEL` have defaults or can be adjusted as needed. The displayed values are examples or placeholders only; do not put real secrets in documentation.
 
 The root `.gitignore` excludes `.env`, `.env.*`, `server/.env`, and `server/.env.*` (while allowing `.env.example` files). Keep both `.env` files out of commits and never expose backend secrets through `VITE_` variables.
 
@@ -62,7 +62,8 @@ The readiness estimate is the percentage of the selected career's maintained ski
 
 ## Tests and build
 
-- `npm test` runs backend schema and readiness tests.
+- `npm test` runs all backend tests from the project root. Alternatively, run `npm test` from `server/`.
+- `npm start` starts the API from `server/`; `npm run server` starts it from the project root for development.
 - `npm run build` creates the Vite production build in `dist/`.
 
 ## Deployment

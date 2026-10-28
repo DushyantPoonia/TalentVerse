@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assessmentSchema, loginSchema, registerSchema } from '../src/validators/schemas.js';
+import { assessmentSchema, loginSchema, profileSchema, registerSchema } from '../src/validators/schemas.js';
 import { calculateReadiness, generateCareerAnalysis } from '../src/services/aiAnalysis.js';
 import { getCareerRequirements } from '../src/config/careerSkills.js';
 import Assessment from '../src/models/Assessment.js';
@@ -13,6 +13,11 @@ test('registration rejects short passwords and malformed email', () => {
 test('login requires a valid email and an eight-character password', () => {
   assert.equal(loginSchema.safeParse({ email: 'alex@example.com', password: 'securepass' }).success, true);
   assert.equal(loginSchema.safeParse({ email: 'bad', password: '1234567' }).success, false);
+});
+
+test('profile updates reject user-controlled identity and role fields', () => {
+  assert.equal(profileSchema.safeParse({ name: 'Someone else', user: 'not-the-owner', role: 'admin' }).success, false);
+  assert.deepEqual(profileSchema.parse({ goal: 'Build a portfolio' }), { goal: 'Build a portfolio' });
 });
 
 test('assessment validation checks required fields and bounded learning time', () => {
